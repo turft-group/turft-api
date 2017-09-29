@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\Auth;
 class Group extends Model
 {
     protected $hidden = array('created_at', 'updated_at');
+    protected $fillable = ['name'];
 
     /**
      * @return BelongsToMany
@@ -21,17 +22,17 @@ class Group extends Model
 
     public function save(array $options = [])
     {
-        $insert = (isset($this->id));
+        $insert = (!isset($this->id));
         parent::save($options);
 
         if ($insert) {
-            $this->addUser(Auth::user()->id, "owner");
+            $this->users()->attach(Auth::user()->id, ["role" => "owner"]);
         }
     }
 
     public function hasUser($user)
     {
-        return $this->users()->contains($user->id);
+        return $this->users()->where('user_id', $user)->exists();
     }
 
     public function isOwner($user)
@@ -48,7 +49,11 @@ class Group extends Model
 
     public function addUser($user, $role = "member")
     {
-        $this->users()->attach($user->id, ['role' => $role]);
+        if ($role == "owner") {
+            return false;
+        }
+        $this->users()->attach($user, ["role" => $role]);
+        return true;
     }
 
     public function getUserRole($user)
@@ -56,15 +61,15 @@ class Group extends Model
         if (!$this->hasUser($user)) {
             return null;
         }
-        $row = $this->users()->where('user_id', $user)->select();
-        return $row['role'];
+        $row = $this->users()->where('user_id', $user)->first();
+        return $row["pivot"]["role"];
     }
 
     public function updateUser($user, $role) {
         if ($role == "owner") {
-            $owner = $this->users()->where('role', "owner")->select();
-            if ($owner['user_id'] != $user && $this->hasUser($user)) {
-                $this->users()->updateExistingPivot($owner['user_id'], ['role' => "admin"]);
+            $owner = $this->users()->where('role', "owner")->first();
+            if ($owner['pivot']['user_id'] != $user && $this->hasUser($user)) {
+                $this->users()->updateExistingPivot($owner['pivot']['user_id'], ['role' => "admin"]);
                 $this->users()->updateExistingPivot($user, ['role' => "owner"]);
             }
         } else {

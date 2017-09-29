@@ -50,22 +50,22 @@ class GroupController extends Controller
     /**
      * Display the specified resource.
      *
-     * @param  \App\Group $group
-     * @return array
+     * @param  Group $group
+     * @return Group
      */
     public function show(Group $group)
     {
         if (!$this->checkGroupRight($group, 'member')) {
             return $this->response;
         }
-        return $group->toArray();
+        return $group->load('users');
     }
 
     /**
      * Update the specified resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @param  \App\Group  $group
+     * @param  Group  $group
      * @return \Illuminate\Http\Response
      */
     public function update(Request $request, Group $group)
@@ -77,6 +77,7 @@ class GroupController extends Controller
         if (!$this->validateRequest($request)) {
             return $this->response;
         }
+
         $group->update($request->all());
 
         return response()->json([
@@ -87,12 +88,12 @@ class GroupController extends Controller
     /**
      * Remove the specified resource from storage.
      *
-     * @param  \App\Group  $group
+     * @param  Group  $group
      * @return \Illuminate\Http\Response
      */
     public function destroy(Group $group)
     {
-        if ($response = $this->checkGroupRight($group, 'owner')) {
+        if (!$this->checkGroupRight($group, 'owner')) {
             return $this->response;
         }
         if ($group->delete()) {
@@ -111,7 +112,7 @@ class GroupController extends Controller
 
     protected function validateRequest(Request $request) {
         $validator = Validator::make($request->all(), [
-            'name' => 'required|max:50',
+            'name' => 'required|max:50|unique:groups',
         ]);
 
         if ($validator->fails()) {
@@ -133,17 +134,22 @@ class GroupController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     protected function addUser(Group $group) {
+        $group->load("users");
         $type = Input::get('type');
         $userId = Input::get('user');
         $check = $type == "owner" || $type == "admin" ? "owner" : "admin";
         $role = $group->getUserRole($userId);
-        if ($role == "admin" || $role == "owner") {
+        if ($role == "admin" || $role == "owner" || $type == "admin" || $type == "owner") {
             $check = "owner";
         }
         if (!$this->checkGroupRight($group, $check)) {
             return $this->response;
         }
-        $group->addUser($userId, $type);
+        if ($role) {
+            $group->updateUser($userId, $type);
+        } else {
+            $group->addUser($userId, $type);
+        }
         return response()->json([
             'added' => true
         ], Response::HTTP_OK);
@@ -177,7 +183,7 @@ class GroupController extends Controller
         if ($authorized) {
             return true;
         } else {
-            $this->response = response()->json(["Response" => "Unauthorized"], Response::HTTP_UNAUTHORIZED);
+            $this->response = response()->json(["Response" => "Forbidden"], Response::HTTP_FORBIDDEN);
             return false;
         }
     }

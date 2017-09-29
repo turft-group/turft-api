@@ -1,0 +1,239 @@
+<html>
+<head>
+    <script
+            src="https://code.jquery.com/jquery-3.2.1.min.js"
+            integrity="sha256-hwg4gsxgFZhOsEEamdOYGBf13FyQuiTwlAQgxVSNgt4="
+            crossorigin="anonymous"></script>
+
+    <script>
+        var accessToken;
+        var client_id = 3;
+        var client_secret = 'bzJFlTIebXZAFmtaHS0UhmQeMmewXXCs3tJxLyi8';
+
+        $.ajaxSetup({
+            beforeSend: function(xhr){
+                xhr.setRequestHeader('Authorization', 'Bearer ' + accessToken);
+            },
+            error: function(jqXHR, textStatus, errorThrown) {
+                console.log(jqXHR);
+                $('#right').html("<h2>Error: "+ errorThrown +"</h2>" +
+                    jqXHR.responseText);
+            }
+        });
+        function register(random) {
+            var name = "test";
+            var password = "test";
+            if (random) {
+                name = randomStr(12);
+                password = randomStr(12);
+            }
+            $.ajax({
+                url: 'http://localhost:8000/api/register',
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    'grant_type': 'password',
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'name': name +'@test.nl',
+                    'email': name +'@test.nl',
+                    'password': password,
+                    'scope': ''
+                }
+            }).done(function (result) {
+                console.log(result);
+            });
+        }
+        function login() {
+            $.ajax({
+                url: 'http://localhost:8000/oauth/token',
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    'grant_type': 'password',
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'username': 'test@test.nl',
+                    'password': 'test123',
+                    'scope': ''
+                }
+            }).done(function (result) {
+                $('#right').html(JSON.stringify(result, null, 2));
+                accessToken = result.access_token;
+            });
+        }
+
+        function getUser() {
+            $.ajax({
+                url: 'http://localhost:8000/api/user',
+                type: 'GET',
+                dataType: 'json'
+            }).done(function(result) {
+                $('#right').html(JSON.stringify(result, null, 2));
+            });
+        }
+
+        function getGroups() {
+            $.ajax({
+                url: 'http://localhost:8000/api/group',
+                type: 'GET',
+                dataType: 'json'
+            }).done(function(result) {
+                $('#left').html("");
+                $.each(result, function(key, group) {
+                    $('#left').append('<button onclick="selectGroup('+ group.id +')">'+ group.name +'</button>');
+                });
+                $('#right').html(JSON.stringify(result, null, 2));
+            });
+        }
+
+        function addGroup() {
+            $.ajax({
+                url: 'http://localhost:8000/api/group',
+                type: 'POST',
+                dataType: 'json',
+                data: { 'name': randomStr(12) }
+            }).done(function(result) {
+                $('#right').html(JSON.stringify(result, null, 2));
+            });
+        }
+
+        function selectGroup(id) {
+            $.ajax({
+                url: 'http://localhost:8000/api/group/'+ id,
+                type: 'GET',
+                dataType: 'json',
+            }).done(function(result) {
+                $('#right').html('<button onclick="renameGroup('+ id +')">Rename</button>' +
+                    '<button onclick="deleteGroup('+ id +')">Delete</button>' +
+                    '<button onclick="addUser('+ id +', \'member\')">Add member</button>' +
+                    '<button onclick="addUser('+ id +', \'admin\')">Add admin</button>' +
+                    '<button onclick="addOwner('+ id +')">Add owner</button>' +
+                    'Id: '+ result.id +
+                    'Name: '+ result.name +
+                    'users: <br />');
+                $.each(result.users, function(key, user) {
+                    $('#right').append(user.name +' with role '+ user.pivot.role +'<br />');
+                })
+            });
+        }
+
+        function renameGroup(id) {
+            $.ajax({
+                url: 'http://localhost:8000/api/group/' + id,
+                type: 'PUT',
+                dataType: 'json',
+                data: { 'name': randomStr(12) }
+            }).done(function(result) {
+                $('#right').html(JSON.stringify(result, null, 2));
+                $.when(getGroups()).done(
+                    selectGroup(id));
+            });
+        }
+
+        function deleteGroup(id) {
+            $.ajax({
+                url: 'http://localhost:8000/api/group/' + id,
+                type: 'DELETE',
+                dataType: 'json'
+            }).done(function(result) {
+                $('#right').html(JSON.stringify(result, null, 2));
+                getGroups();
+            });
+        }
+
+        function addUser(group, type) {
+            var name = randomStr(12);
+            var password = randomStr(12);
+            $.ajax({
+                url: 'http://localhost:8000/api/register',
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    'grant_type': 'password',
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'name': name +'@test.nl',
+                    'email': name +'@test.nl',
+                    'password': password,
+                    'scope': ''
+                }
+            }).done(function (result) {
+                $.ajax({
+                    url: 'http://localhost:8000/api/group/' + group +'/user',
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {'user': result.id, 'type': type}
+                }).done(function(result) {
+                    $('#right').html(JSON.stringify(result, null, 2));
+                    selectGroup(group);
+                    return result;
+                });
+            });
+        }
+
+        function addOwner(group) {
+            var name = randomStr(12);
+            var password = randomStr(12);
+            $.ajax({
+                url: 'http://localhost:8000/api/register',
+                type: 'POST',
+                dataType: 'json',
+                data: {
+                    'grant_type': 'password',
+                    'client_id': client_id,
+                    'client_secret': client_secret,
+                    'name': name +'@test.nl',
+                    'email': name +'@test.nl',
+                    'password': password,
+                    'scope': ''
+                }
+            }).done(function (result) {
+                userid = result.id;
+                $.ajax({
+                    url: 'http://localhost:8000/api/group/' + group +'/user',
+                    type: 'POST',
+                    dataType: 'json',
+                    data: {'user': result.id, 'type': "member"}
+                }).done(function(result) {
+                    $.ajax({
+                        url: 'http://localhost:8000/api/group/' + group +'/user',
+                        type: 'POST',
+                        dataType: 'json',
+                        data: {'user': userid, 'type': "owner"}
+                    }).done(function(result) {
+                        $('#right').html(JSON.stringify(result, null, 2));
+                        selectGroup(group);
+                        return result;
+                    });
+                });
+            });
+        }
+
+        function randomStr(size) {
+            var text = "";
+            var possible = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+
+            for (var i = 0; i < size; i++)
+                text += possible.charAt(Math.floor(Math.random() * possible.length));
+
+            return text;
+        }
+
+    </script>
+</head>
+<body>
+<div>
+<button onclick="login()">Login</button>
+<button onclick="getUser()">Get User</button>
+<button onclick="getGroups()">Get Groups</button>
+<button onclick="addGroup()">Add Group</button>
+</div>
+<div style="float: left; display: inline-block; width: 45%; height: 500px; border: 1px solid #ccc; margin-top: 10px; padding: 10px;" id="left">
+    Left block
+</div>
+<div style="float: right; display: inline-block; width: 45%; height: 500px; border: 1px solid #ccc; margin-top: 10px; padding: 10px;" id="right">
+    Right block
+</div>
+</body>
+</html>
